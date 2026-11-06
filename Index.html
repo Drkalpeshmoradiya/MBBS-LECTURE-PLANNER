@@ -1,0 +1,144 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MBBS Lecture Planner</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;background:#f3f6fb;margin:0;padding:14px;color:#17243b}
+main{max-width:650px;margin:auto}
+h2{text-align:center;color:#1557a0}
+.panel{background:white;padding:16px;border-radius:15px;margin:12px 0;box-shadow:0 2px 9px #0001}
+nav{display:flex;gap:8px}
+button{border:0;border-radius:8px;padding:11px;background:#1769c2;color:white;cursor:pointer}
+nav button{flex:1}
+.controls{display:flex;justify-content:space-between;align-items:center}
+.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.day{text-align:center;padding:10px 0;border-radius:7px;background:#f1f4f8;color:#222;min-height:43px}
+.heading{background:white;font-size:12px;font-weight:bold}
+.sunday{color:#e02020!important;font-weight:bold}
+.selected{background:#cfe5ff}
+.hasLecture{border-bottom:3px solid #1769c2}
+input,select{width:100%;padding:11px;margin:6px 0 12px;border:1px solid #ccd4df;border-radius:7px}
+.lecture{padding:12px;background:#eef5ff;border-radius:9px;margin:8px 0}
+small{color:#58677d}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{border-bottom:1px solid #ddd;padding:9px;text-align:left}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<main>
+<h2>📚 MBBS Lecture Planner</h2>
+<nav>
+<button onclick="show('calendar')">Calendar</button>
+<button onclick="show('table')">Lecture Table</button>
+<button onclick="show('add')">+ Add</button>
+</nav>
+<section id="calendar" class="panel">
+<div class="controls">
+<button onclick="changeMonth(-1)">❮</button>
+<strong id="monthTitle"></strong>
+<button onclick="changeMonth(1)">❯</button>
+</div>
+<br>
+<div id="days" class="grid"></div>
+<h3 id="selectedTitle"></h3>
+<div id="details"></div>
+</section>
+<section id="table" class="panel hidden">
+<h3>All Lectures</h3>
+<div style="overflow-x:auto">
+<table>
+<thead><tr><th>Date</th><th>Batch</th><th>Topic</th><th>Time</th></tr></thead>
+<tbody id="rows"></tbody>
+</table>
+</div>
+</section>
+<section id="add" class="panel hidden">
+<h3>Add Lecture</h3>
+<label>Date</label><input type="date" id="date">
+<label>Time</label><input type="time" id="time">
+<label>Batch</label>
+<select id="batch">
+<option>Second MBBS</option>
+<option>Third MBBS Part 1</option>
+<option>Third MBBS Part 2</option>
+</select>
+<label>Topic</label><input id="topic" placeholder="Lecture topic">
+<button onclick="addLecture()">Save Lecture</button>
+</section>
+<div class="panel">
+<strong>🔔 Reminder Schedule</strong>
+<p>Previous day: 7:00 PM</p>
+<p>Lecture day: 9:00 AM</p>
+<small>Automatic notifications are not yet enabled.</small>
+</div>
+</main>
+<script>
+let today=new Date();
+let year=today.getFullYear(),month=today.getMonth();
+let selected=today.getDate();
+let lectures=JSON.parse(localStorage.getItem('lectures')||'[]');
+function key(y,m,d){
+return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+}
+function show(id){
+['calendar','table','add'].forEach(x=>document.getElementById(x).classList.toggle('hidden',x!==id));
+render();
+}
+function changeMonth(n){
+month+=n;
+if(month<0){month=11;year--}
+if(month>11){month=0;year++}
+selected=1;render();
+}
+function render(){
+let title=new Date(year,month,1).toLocaleString('en-IN',{month:'long',year:'numeric'});
+document.getElementById('monthTitle').textContent=title;
+let days=document.getElementById('days');
+days.innerHTML='';
+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach((w,i)=>{
+let el=document.createElement('div');
+el.className='day heading'+(i===0?' sunday':'');
+el.textContent=w;days.appendChild(el);
+});
+let first=new Date(year,month,1).getDay();
+let count=new Date(year,month+1,0).getDate();
+for(let i=0;i<first;i++)days.appendChild(document.createElement('div'));
+for(let d=1;d<=count;d++){
+let el=document.createElement('div');
+let has=lectures.some(l=>l.date===key(year,month,d));
+el.className='day'+(new Date(year,month,d).getDay()===0?' sunday':'')+(d===selected?' selected':'')+(has?' hasLecture':'');
+el.textContent=d;
+el.onclick=()=>{selected=d;render()};
+days.appendChild(el);
+}
+let current=key(year,month,selected);
+document.getElementById('selectedTitle').textContent=selected+' '+title;
+let list=lectures.filter(l=>l.date===current).sort((a,b)=>a.time.localeCompare(b.time));
+document.getElementById('details').innerHTML=list.length?list.map(l=>'<div class="lecture"><b>'+safe(l.batch)+'</b><p>'+safe(l.topic)+'</p>🕒 '+safe(l.time)+'</div>').join(''):'No lectures on this date.';
+document.getElementById('rows').innerHTML=lectures.slice().sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).map(l=>'<tr><td>'+safe(l.date)+'</td><td>'+safe(l.batch)+'</td><td>'+safe(l.topic)+'</td><td>'+safe(l.time)+'</td></tr>').join('');
+}
+function safe(s){
+return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function addLecture(){
+let d=document.getElementById('date').value;
+let t=document.getElementById('time').value;
+let b=document.getElementById('batch').value;
+let p=document.getElementById('topic').value.trim();
+if(!d||!t||!p){alert('Please fill all details');return}
+lectures.push({date:d,time:t,batch:b,topic:p});
+localStorage.setItem('lectures',JSON.stringify(lectures));
+let parts=d.split('-').map(Number);
+year=parts[0];month=parts[1]-1;selected=parts[2];
+document.getElementById('topic').value='';
+show('calendar');
+}
+render();
+</script>
+</body>
+</html>
